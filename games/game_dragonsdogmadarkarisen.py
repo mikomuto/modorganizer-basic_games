@@ -7,7 +7,6 @@ from PyQt6.QtCore import QDateTime, QDir, QFile, QFileInfo, Qt, qInfo
 from ..basic_game import BasicGame
 
 class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
-
     ValidFileStructure = False
     FixableFileStructure = False
     RE_BODYFILE = re.compile('[fm]_[aiw]_\w+.arc')
@@ -21,7 +20,7 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
         # we check to see if an .arc file is contained within a valid root folder
         pathRoot = path.split(os.sep)[0]
         entryExt = entry.suffix().lower()
-        
+                
         if pathRoot.lower() in self.VALID_ROOT_FOLDERS:
             for extension in self.VALID_FILE_EXTENSIONS:
                 if entry.name().lower().endswith(extension.lower()):
@@ -35,8 +34,8 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
                     if parent in self.VALID_ROOT_FOLDERS:
                         if (entry, parent) not in self.FoldersToMove:
                             size = len(self.FoldersToMove)
-                            qInfo("Adding to folder move list: " + str(size) + ": " + path + entry.name())
-                            self.FoldersToMove.append((entry, parent.name()))                      
+                            # qInfo("Adding to folder move list: " + str(size) + ": " + path + entry.name())
+                            self.FoldersToMove.append((entry, parent.name()))                    
             else:
                 isBodyFile = self.RE_BODYFILE.match(entry.name())
                 if isBodyFile:
@@ -55,48 +54,50 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
         return mobase.IFileTree.WalkReturn.CONTINUE
 
     def dataLooksValid(self, tree: mobase.IFileTree) -> mobase.ModDataChecker.CheckReturn:
-        qInfo("Data validation start")
+        # qInfo("Data validation start")
         self.ValidFileStructure = False
         self.FixableFileStructure = False
         self.FilesToMove.clear()
         self.FoldersToMove.clear()
-        
+               
         #check filetree
-        qInfo("Starting tree walk")
+        # qInfo("Starting tree walk")
         tree.walk(self.checkEntry, os.sep)
         
         #fix if needed
         if (self.FixableFileStructure == True):
-                qInfo("Fixable file structure found")
+                # qInfo("Fixable file structure found")
                 return mobase.ModDataChecker.FIXABLE
         
         #all good?
         if (self.ValidFileStructure == True):
-                qInfo("Valid file structure found")
+                # qInfo("Valid file structure found")
                 return mobase.ModDataChecker.VALID
 
-        qInfo("Invalid file structure found")
+        # qInfo("Invalid file structure found")
         return mobase.ModDataChecker.INVALID
         
     def fix(self, filetree: mobase.IFileTree) -> mobase.IFileTree:
         size_folderstomove = len(self.FoldersToMove)
-        qInfo("folder move list size: " + str(size_folderstomove))
+        # qInfo("folder move list size: " + str(size_folderstomove))
         size_filestomove = len(self.FilesToMove)
-        qInfo("file move list size: " + str(size_filestomove))
+        # qInfo("file move list size: " + str(size_filestomove))
         if size_folderstomove > 0:
             for entry, path in self.FoldersToMove:
-                qInfo("Moving folder: " + path + "/" + entry.name())
+                entryPath = filetree.pathTo(entry, os.sep)
+                pathRoot = entryPath.split(os.sep)[0]
                 filetree.move(entry, path + "/" + entry.name(), policy=mobase.IFileTree.MERGE)
+                filetree.remove(pathRoot) #remove empty branch
         else:
             for entry, path in self.FilesToMove:
-                qInfo("Moving file: " + path + entry.name())
+                # qInfo("Moving file: " + path + entry.name())
                 filetree.move(entry, path, policy=mobase.IFileTree.MERGE)
-        
+
         #remove non-root folders
         for entry in filetree:
             if entry is not None:
                 if entry.name() not in self.VALID_ROOT_FOLDERS:
-                    qInfo("Deleting: " + entry.name())
+                    # qInfo("Deleting: " + entry.name())
                     filetree.remove(entry.name())
         
         return filetree
