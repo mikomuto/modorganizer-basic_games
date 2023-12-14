@@ -12,7 +12,7 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
     RE_BODYFILE = re.compile('[fm]_[aiw]_\w+.arc')
     RE_BACKUP = re.compile('.*BACK *UP.*', re.IGNORECASE)
     VALID_ROOT_FOLDERS = ["rom", "movie", "sound"]
-    VALID_FILE_EXTENSIONS = [".arc", ".ist", ".stm", ".tex", ".qct", ".qr", "wmv"]
+    VALID_FILE_EXTENSIONS = [".arc", ".ist", ".lvl", ".stm", ".shl", ".tex", ".qct", ".qr", "wmv"]
     NO_CHILDFOLDERS = ["a_acc", "i_body", "w_leg"]
     FilesToMove: list[tuple[mobase.FileTreeEntry, str]] = []
     FoldersToMove: list[tuple[mobase.FileTreeEntry, str]] = []
