@@ -1,4 +1,5 @@
-import os, re
+import os
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,8 +10,9 @@ from ..basic_game import BasicGame
 from ..steam_utils import find_steam_path
 
 class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
-    gamePluginDebug = True
-    ValidFileStructure = False
+    plugin_debug = False
+    valid_structure = False
+    fixable_structure = False
     RE_BODYFILE = re.compile('[fm]_[aiw]_\w+.arc')
     RE_DL1_BODYFILE = re.compile('[fm]_a_\w+820\d.arc')
     RE_HEXEXTENSION = re.compile('[\.0-9a-fA-F]{8}')
@@ -18,7 +20,7 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
     VALID_CHILD_FOLDERS = ["dl1", "enemy", "eq", "etc", "event", "gui", "h_enemy", "ingamemanual", "item_b", 
             "map", "message", "mnpc", "npc", "npcfca", "npcfsm","om","pwnmsg","quest","shell","sk","sound",
             "stage","voice","wp","bbsrpg_core","bbs_rpg","game_main","Initialize","title",]
-    VALID_FILE_EXTENSIONS = [".arc", ".gmd", ".ist", ".lvl", ".stm", ".shl", ".tex", ".qct", ".qr", "wmv"]
+    VALID_FILE_EXTENSIONS = [".ocl", ".efl", ".arc", ".gmd", ".ist", ".lvl", ".stm", ".shl", ".tex", ".qct", ".qr", ".wmv", ".sngw",]
     NO_CHILDFOLDERS = ["a_acc", "i_body", "w_leg"]
     MoveList: list[tuple[mobase.FileTreeEntry, str]] = []
     DeleteList: list[tuple[mobase.FileTreeEntry, str]] = []
@@ -28,49 +30,34 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
         pathRoot = path.split(os.sep)[0]
         entryName, entryExt = os.path.splitext(entry.name())
         
-        if self.gamePluginDebug:
-            qInfo("checkFiletreeEntry: " + path + " : " + entry.name())
-        if entry.isFile():
-            if pathRoot.lower() in self.VALID_ROOT_FOLDERS:
-                for extension in self.VALID_FILE_EXTENSIONS:
-                    if entry.name().lower().endswith(extension.lower()):
-                        self.ValidFileStructure = True
-                        if self.gamePluginDebug:
-                            qInfo("Valid file structure found")
-                        return mobase.IFileTree.WalkReturn.STOP
-
-        return mobase.IFileTree.WalkReturn.CONTINUE
-        
-    def checkFiletreeEntryAdvanced(self, path: str, entry: mobase.FileTreeEntry) -> mobase.IFileTree.WalkReturn:
-        # we check to see if an .arc file is contained within a valid root folder
-        pathRoot = path.split(os.sep)[0]
-        entryName, entryExt = os.path.splitext(entry.name())
-        
-        if self.gamePluginDebug:
-            qInfo("checkFiletreeEntryAdvanced: " + path + " : " + entry.name())
-
-        if entry.isDir():            
+        if self.plugin_debug:
+            qInfo(f'checkFiletreeEntry pathroot:{pathRoot} path:{path} entry:{entry.name()}')
+        if entry.isDir():
             parent = entry.parent()
-            if parent is not None:
-                if pathRoot not in self.VALID_ROOT_FOLDERS:
-                    if parent in self.VALID_ROOT_FOLDERS:                            
-                        if self.gamePluginDebug:
-                            qInfo(f"Adding parent to move list: {entry.name()} {parent.name()}")
-                        self.MoveList.append((entry, parent.name() + os.sep))
-                    elif entry in self.VALID_CHILD_FOLDERS and parent not in self.VALID_CHILD_FOLDERS:
-                        if self.gamePluginDebug:
-                            qInfo(f"Adding child to move list: {path} {entry.name()}")
-                        self.MoveList.append((entry, "rom" + os.sep))
+            if pathRoot not in self.VALID_ROOT_FOLDERS:
+                if parent in self.VALID_ROOT_FOLDERS and entry in self.VALID_CHILD_FOLDERS:
+                    if self.plugin_debug:
+                        qInfo(f"Adding child to move list: {path} {entry.name()}")
+                    self.MoveList.append((entry, "rom" + os.sep))
+                    self.fixable_structure = True
+                    return mobase.IFileTree.WalkReturn.SKIP
         else:
+            if pathRoot in self.VALID_ROOT_FOLDERS:
+                for extension in self.VALID_FILE_EXTENSIONS:
+                    if entry.name().endswith(extension):
+                        self.valid_structure = True
+                        if self.plugin_debug:
+                            qInfo("checkFiletreeEntry valid")
+                        return mobase.IFileTree.WalkReturn.STOP
             isBodyFile = self.RE_BODYFILE.match(entry.name())
             isDl1BodyFile = self.RE_DL1_BODYFILE.match(entry.name())
             if isBodyFile:
-                
+                self.fixable_structure = True
                 parentFolder = str(entry.name())[0]
                 grandParentFolder = re.split(r'_(?=._)|[0-9]',str(entry.name()))[1]
                 size = len(self.MoveList)
-                if self.gamePluginDebug:
-                    qInfo("Adding to move list: " + path + entry.name())
+                if self.plugin_debug:
+                    qInfo(f'Adding to move list: {path + entry.name()}')
                 if isDl1BodyFile:
                     targetPath = "/rom/dl1/eq/"  + grandParentFolder + os.sep + parentFolder + os.sep    
                     self.MoveList.append((entry, targetPath))
@@ -81,64 +68,66 @@ class DragonsDogmaDarkArisenModDataChecker(mobase.ModDataChecker):
                     targetPath = "/rom/eq/" + grandParentFolder + os.sep + parentFolder + os.sep
                     self.MoveList.append((entry, targetPath))
             hasHexFileExtension = self.RE_HEXEXTENSION.match(entryExt)
-            qInfo(f"Entry ext: {entryExt}")
             # ignore sound and game manual files with hex extenstions
             if hasHexFileExtension: # and not ('sound' in path or 'ingamemanual' in path):
-                qInfo("Invalid TEX file found: %s" % (path + entry.name()))
+                qInfo(f'Invalid TEX file found: {path + entry.name()}')
                 #QMessageBox.information(None, "Test", "testing....")
                 self.MoveList.append((entry, path + entryName + ".tex"))
+            
+            
 
         return mobase.IFileTree.WalkReturn.CONTINUE
         
     def fix(self, filetree: mobase.IFileTree) -> mobase.IFileTree:
-        # advanced filetree check
-        filetree.walk(self.checkFiletreeEntryAdvanced, os.sep)
-        
         size_DeleteList = len(self.DeleteList)
         size_MoveList = len(self.MoveList)
-        if self.gamePluginDebug:    
-            qInfo("folder delete list size: " + str(size_DeleteList))
-            qInfo("folder move list size: " + str(size_MoveList))
+        if self.plugin_debug:    
+            qInfo(f'folder delete list size: {str(size_DeleteList)}')
+            qInfo(f'folder move list size: {str(size_MoveList)}')
+        if size_DeleteList > 0 and size_MoveList > 0:
+            self.Invalid_structure = true
         if size_DeleteList > 0:
             for entry, path in reversed(self.DeleteList):
-                if self.gamePluginDebug:
-                    qInfo("Deleting: " + path + entry.name())
+                if self.plugin_debug:
+                    qInfo(f'Deleting: {path + entry.name()}')
                 filetree.move(entry, "/delete/" + entry.name(), policy=mobase.IFileTree.MERGE)
         if size_MoveList > 0:
             for entry, path in reversed(self.MoveList):
                 entryPath = filetree.pathTo(entry, os.sep)
                 pathRoot = entryPath.split(os.sep)[0]
-                if self.gamePluginDebug:
+                if self.plugin_debug:
                     qInfo(f"Moving: {entry.name()} to {path}")
                 filetree.move(entry, path, policy=mobase.IFileTree.MERGE)
                 filetree.remove(pathRoot) #remove empty branch
 
         # remove invalid root folders
-        # for entry in filetree:
-            # if entry is not None:
-                # if entry.name() not in self.VALID_ROOT_FOLDERS:
-                    # if self.gamePluginDebug:
-                        # qInfo("Deleting invalid root: " + entry.name())
-                    # filetree.remove(entry.name())
+        filetree.remove("delete")
         
         return filetree
 
     def dataLooksValid(self, tree: mobase.IFileTree) -> mobase.ModDataChecker.CheckReturn:
-        if self.gamePluginDebug:
-            qInfo("Data validation start")
-        self.ValidFileStructure = False
+        if self.plugin_debug:
+            qInfo(f'Data validation start: {tree.name()}')
+        self.valid_structure = False
+        self.fixable_structure = False
         self.MoveList.clear()
         self.DeleteList.clear()
        
         # check filetree
         tree.walk(self.checkFiletreeEntry, os.sep)
+        
+        if (self.fixable_structure == True):
+            if self.plugin_debug:
+                qInfo("Fixable file structure")
+            return mobase.ModDataChecker.FIXABLE
 
-        if (self.ValidFileStructure == True):
-            if self.gamePluginDebug:
-                qInfo("Valid file structure found")
+        if (self.valid_structure == True):
+            if self.plugin_debug:
+                qInfo("Valid file structure")
             return mobase.ModDataChecker.VALID
-                
-        return mobase.ModDataChecker.FIXABLE
+        
+        return mobase.ModDataChecker.INVALID
+        
      
 class DragonsDogmaDarkArisen(BasicGame):
     Name = "Dragon's Dogma: Dark Arisen Support Plugin"
